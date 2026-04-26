@@ -94,6 +94,13 @@
             color: var(--text);
         }
         .btn-danger { background: var(--red); }
+        .btn-sm {
+            display: inline-block;
+            width: auto;
+            padding: 10px 16px;
+            font-size: 0.85rem;
+            margin: 4px;
+        }
 
         label {
             display: block;
@@ -119,6 +126,87 @@
             border-color: var(--accent);
         }
         textarea { resize: vertical; min-height: 60px; }
+
+        .search-box {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .search-box input {
+            flex: 1;
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            text-align: center;
+            letter-spacing: 0.05em;
+        }
+        .search-box button {
+            width: 60px;
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .analysis-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 8px 0;
+        }
+        .analysis-card .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .analysis-card .price {
+            font-size: 2rem;
+            font-weight: 800;
+        }
+        .analysis-card .change {
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+        .change.up { background: #22c55e20; color: var(--green); }
+        .change.down { background: #ef444420; color: var(--red); }
+
+        .zone-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+        .zone-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .signal-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin: 4px;
+        }
+        .signal-buy { background: #22c55e20; color: var(--green); border: 1px solid var(--green); }
+        .signal-wait { background: #eab30820; color: var(--yellow); border: 1px solid var(--yellow); }
+        .signal-avoid { background: #ef444420; color: var(--red); border: 1px solid var(--red); }
+
+        .insight-box {
+            background: #3b82f610;
+            border-left: 3px solid var(--accent);
+            padding: 12px;
+            margin: 8px 0;
+            font-size: 0.9rem;
+            border-radius: 0 8px 8px 0;
+        }
 
         .trade-row {
             display: flex;
@@ -175,6 +263,18 @@
             color: var(--accent);
             font-weight: 700;
         }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--text-secondary);
+            border-top: 2px solid var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -186,6 +286,20 @@
 
         <!-- Dashboard -->
         <div id="dashboard" class="section active">
+            <!-- 🔍 STOCK ANALYSIS CARD -->
+            <div class="card" style="border-left: 3px solid var(--accent);">
+                <h3>🔍 Quick Stock Analysis</h3>
+                <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:8px;">
+                    Enter a symbol to analyze based on your journal data & market structure
+                </p>
+                <div class="search-box">
+                    <input type="text" id="stockSearch" placeholder="AAPL" maxlength="5" autocomplete="off">
+                    <button onclick="analyzeStock()">🔎</button>
+                </div>
+                <div id="stockResult"></div>
+            </div>
+
+            <!-- Performance Overview -->
             <div class="card">
                 <h3>Performance Overview</h3>
                 <div class="stats-grid">
@@ -391,14 +505,28 @@
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             document.getElementById(sectionId).classList.add('active');
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            event.target.closest('.nav-btn')?.classList.add('active');
+            if (event && event.target) {
+                const btn = event.target.closest('.nav-btn');
+                if (btn) btn.classList.add('active');
+            }
             if (sectionId === 'dashboard') updateDashboard();
         }
 
         // ---- TOGGLE MFE/MAE FIELDS ----
-        document.getElementById('outcome').addEventListener('change', function() {
-            document.getElementById('mfe-mae-fields').style.display =
-                (this.value === 'Loss' || this.value === 'Breakeven') ? 'block' : 'none';
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('outcome').addEventListener('change', function() {
+                document.getElementById('mfe-mae-fields').style.display =
+                    (this.value === 'Loss' || this.value === 'Breakeven') ? 'block' : 'none';
+            });
+            document.getElementById('exitdate').value = new Date().toISOString().split('T')[0];
+            updateDashboard();
+            window.addEventListener('resize', () => {
+                if (document.getElementById('dashboard').classList.contains('active')) updateDashboard();
+            });
+            // Enter key search trigger
+            document.getElementById('stockSearch').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') analyzeStock();
+            });
         });
 
         // ---- SAVE TRADE ----
@@ -453,7 +581,6 @@
             trades.unshift(trade);
             saveTrades(trades);
 
-            // Clear form
             ['ticker', 'entry', 'stop', 'target', 'size', 'mfe', 'mae', 'notes'].forEach(id => document.getElementById(
                 id).value = '');
             document.getElementById('outcome').value = '';
@@ -512,7 +639,8 @@
 
             const container = document.getElementById('historyList');
             if (filtered.length === 0) {
-                container.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:20px;">No trades found</p>';
+                container.innerHTML =
+                    '<p style="text-align:center;color:var(--text-secondary);padding:20px;">No trades found</p>';
                 return;
             }
             container.innerHTML = filtered.map(t => `
@@ -551,7 +679,6 @@
             const avgLoss = lossTrades.length > 0 ? lossTrades.reduce((s, t) => s + t.pnl, 0) / lossTrades.length : 0;
             const bestTrade = trades.length > 0 ? Math.max(...trades.map(t => t.pnl)) : 0;
 
-            // Current streak
             let streak = 0;
             for (const t of trades) {
                 if (t.outcome === 'Win') streak++;
@@ -602,7 +729,6 @@
             const range = maxEq - minEq || 1;
             const stepX = w / (points.length - 1);
 
-            // Draw line
             ctx.beginPath();
             ctx.strokeStyle = '#3b82f6';
             ctx.lineWidth = 2;
@@ -614,7 +740,6 @@
             });
             ctx.stroke();
 
-            // Zero line
             const zeroY = h - ((0 - minEq) / range) * (h - 20) - 10;
             ctx.beginPath();
             ctx.strokeStyle = '#475569';
@@ -658,7 +783,6 @@
             const total = wins.length + losses.length;
             const winRate = total > 0 ? Math.round((wins.length / total) * 100) : 0;
 
-            // MFE/MAE Analysis for losses
             const lossesWithMfe = losses.filter(t => t.mfe !== null && t.mfe !== undefined);
             const avgMfe = lossesWithMfe.length > 0 ?
                 lossesWithMfe.reduce((s, t) => {
@@ -675,7 +799,6 @@
                     return s + maePct;
                 }, 0) / lossesWithMae.length : null;
 
-            // Win rate by market condition
             const conditions = [...new Set(filtered.map(t => t.condition).filter(Boolean))];
             const conditionBreakdown = conditions.map(c => {
                 const cTrades = filtered.filter(t => t.condition === c);
@@ -732,11 +855,252 @@
             resultsDiv.innerHTML = html;
         }
 
-        // ---- INIT ----
-        document.getElementById('exitdate').value = new Date().toISOString().split('T')[0];
+        // ==================== 📊 LIVE STOCK ANALYSIS ====================
+        async function analyzeStock() {
+            const symbol = document.getElementById('stockSearch').value.trim().toUpperCase();
+            const resultDiv = document.getElementById('stockResult');
+
+            if (!symbol) {
+                resultDiv.innerHTML = '<p style="color:var(--yellow);">Please enter a stock symbol.</p>';
+                return;
+            }
+
+            resultDiv.innerHTML = '<p><span class="spinner"></span> Analyzing ' + symbol + '...</p>';
+
+            try {
+                // ---- FETCH MARKET DATA ----
+                // 1. Get quote
+                const quoteRes = await fetch(
+                    `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo&includePrePost=false`)}`
+                );
+                if (!quoteRes.ok) throw new Error('Symbol not found');
+                const quoteData = await quoteRes.json();
+                const result = quoteData.chart.result[0];
+                const meta = result.meta;
+                const quotes = result.indicators.quote[0];
+                const timestamps = result.timestamp;
+
+                const currentPrice = meta.regularMarketPrice;
+                const prevClose = meta.previousClose || meta.chartPreviousClose;
+                const change = currentPrice - prevClose;
+                const changePct = ((change / prevClose) * 100);
+
+                // Calculate key levels from 3 months of data
+                const highs = quotes.high.filter(h => h !== null);
+                const lows = quotes.low.filter(l => l !== null);
+                const closes = quotes.close.filter(c => c !== null);
+
+                if (highs.length < 5) throw new Error('Insufficient data');
+
+                const high3m = Math.max(...highs);
+                const low3m = Math.min(...lows);
+
+                // Average True Range (14-day)
+                let trValues = [];
+                for (let i = 1; i < highs.length; i++) {
+                    const h = highs[i] || closes[i];
+                    const l = lows[i] || closes[i];
+                    const pc = closes[i - 1] || closes[i];
+                    const tr = Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc));
+                    trValues.push(tr);
+                }
+                const atr = trValues.slice(-14).reduce((a, b) => a + b, 0) / 14;
+
+                // Simple moving averages
+                const sma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+                const sma50 = closes.length >= 50 ? closes.slice(-50).reduce((a, b) => a + b, 0) / 50 : sma20;
+
+                // Recent range (last 20 days)
+                const recentHigh = Math.max(...highs.slice(-20));
+                const recentLow = Math.min(...lows.slice(-20));
+                const rangeSize = ((recentHigh - recentLow) / currentPrice) * 100;
+
+                // Volume trend
+                const volumes = quotes.volume?.filter(v => v !== null) || [];
+                const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+                const latestVol = volumes[volumes.length - 1] || 0;
+
+                // Determine market condition
+                let marketCondition = 'Range-bound';
+                let conditionSignal = 'wait';
+                if (rangeSize < 5 && currentPrice > sma20 && sma20 > sma50) {
+                    marketCondition = 'Strong Trend Up (Tight)';
+                    conditionSignal = 'buy';
+                } else if (rangeSize < 5 && currentPrice < sma20 && sma20 < sma50) {
+                    marketCondition = 'Strong Trend Down (Tight)';
+                    conditionSignal = 'avoid';
+                } else if (rangeSize >= 5 && rangeSize < 10) {
+                    marketCondition = 'Range-bound (Tradeable)';
+                    conditionSignal = 'buy';
+                } else if (rangeSize >= 10) {
+                    marketCondition = 'High Volatility / Wide Range';
+                    conditionSignal = 'avoid';
+                }
+
+                // ---- JOURNAL DATA ANALYSIS ----
+                const trades = getTrades();
+                const symbolTrades = trades.filter(t => t.ticker === symbol);
+                const symbolWins = symbolTrades.filter(t => t.outcome === 'Win');
+                const symbolLosses = symbolTrades.filter(t => t.outcome === 'Loss');
+                const symbolWinRate = (symbolWins.length + symbolLosses.length) > 0 ?
+                    Math.round((symbolWins.length / (symbolWins.length + symbolLosses.length)) * 100) : null;
+
+                // MFE/MAE from journal for this symbol
+                const symLossesWithMfe = symbolLosses.filter(t => t.mfe !== null);
+                const symAvgMfe = symLossesWithMfe.length > 0 ?
+                    symLossesWithMfe.reduce((s, t) => {
+                        return s + (t.direction === 'Long' ? ((t.mfe - t.entry) / t.entry * 100) : ((t.entry - t
+                            .mfe) / t.entry * 100));
+                    }, 0) / symLossesWithMfe.length : null;
+
+                const symLossesWithMae = symbolLosses.filter(t => t.mae !== null);
+                const symAvgMae = symLossesWithMae.length > 0 ?
+                    symLossesWithMae.reduce((s, t) => {
+                        return s + (t.direction === 'Long' ? ((t.entry - t.mae) / t.entry * 100) : ((t.mae - t
+                            .entry) / t.entry * 100));
+                    }, 0) / symLossesWithMae.length : null;
+
+                // Calculate suggested entry zones based on data
+                const supportZone = recentLow + (atr * 0.5);
+                const resistanceZone = recentHigh - (atr * 0.5);
+                const midPoint = (recentHigh + recentLow) / 2;
+
+                // ========== BUILD OUTPUT ==========
+                let html = '';
+
+                // Header with price
+                html += `
+                <div class="analysis-card">
+                  <div class="header-row">
+                    <div>
+                      <span style="font-size:0.85rem;color:var(--text-secondary);">${symbol} · ${meta.exchangeName || 'US'}</span>
+                      <div class="price">$${currentPrice.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <span class="change ${change >= 0 ? 'up' : 'down'}">
+                        ${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%)
+                      </span>
+                    </div>
+                  </div>
+                </div>`;
+
+                // Journal Data
+                if (symbolTrades.length > 0) {
+                    const totalPnl = symbolTrades.reduce((s, t) => s + t.pnl, 0);
+                    html += `
+                <div class="analysis-card">
+                  <strong>📋 Your Journal Data for ${symbol}</strong><br>
+                  <span style="font-size:0.9rem;">
+                    <span class="highlight">${symbolTrades.length} trades</span> logged ·
+                    Win Rate: <span class="highlight" style="color:${symbolWinRate >= 50 ? 'var(--green)' : 'var(--red)'}">${symbolWinRate}%</span> ·
+                    Net P&L: <span style="color:${totalPnl >= 0 ? 'var(--green)' : 'var(--red)'}">$${totalPnl.toFixed(2)}</span>
+                  </span>
+                </div>`;
+                } else {
+                    html += `
+                <div class="analysis-card" style="border:1px dashed var(--border);">
+                  <span style="color:var(--text-secondary);">📝 No trades logged for ${symbol} yet. Data below is market-based only.</span>
+                </div>`;
+                }
+
+                // Market Condition Signal
+                const signalMap = {
+                    'buy': '<span class="signal-badge signal-buy">✅ FAVORABLE — High Probability Zone</span>',
+                    'wait': '<span class="signal-badge signal-wait">⏳ NEUTRAL — Wait for Clarity</span>',
+                    'avoid': '<span class="signal-badge signal-avoid">🚫 UNFAVORABLE — Avoid or Invert</span>'
+                };
+
+                html += `
+                <div class="analysis-card">
+                  <strong>🌤️ Market Structure</strong><br>
+                  <span style="font-size:0.9rem;">Condition: <strong>${marketCondition}</strong></span><br>
+                  <span style="font-size:0.85rem;color:var(--text-secondary);">Range: $${recentLow.toFixed(2)} – $${recentHigh.toFixed(2)} (${rangeSize.toFixed(1)}%)</span><br>
+                  <div style="margin-top:8px;">${signalMap[conditionSignal]}</div>
+                </div>`;
+
+                // Price Zones
+                html += `
+                <div class="analysis-card">
+                  <strong>📍 Price Zones & Levels</strong>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+                    <div style="background:var(--card);padding:10px;border-radius:8px;text-align:center;">
+                      <div class="zone-label">🟢 Ideal Buy Zone</div>
+                      <div class="zone-value" style="color:var(--green);">≤ $${supportZone.toFixed(2)}</div>
+                      <div style="font-size:0.75rem;color:var(--text-secondary);">Near Support</div>
+                    </div>
+                    <div style="background:var(--card);padding:10px;border-radius:8px;text-align:center;">
+                      <div class="zone-label">🔴 Avoid Buying Above</div>
+                      <div class="zone-value" style="color:var(--red);">> $${resistanceZone.toFixed(2)}</div>
+                      <div style="font-size:0.75rem;color:var(--text-secondary);">Near Resistance</div>
+                    </div>
+
+`;
+                // Add MFE/MAE based zones if available
+                if (symAvgMae !== null) {
+                    const maeBasedEntry = currentPrice * (1 - symAvgMae / 100);
+                    html += `
+                    <div style="background:var(--card);padding:10px;border-radius:8px;margin-top:8px;">
+                      <div class="zone-label">📉 Data-Driven Entry (from your MAE)</div>
+                      <div class="zone-value" style="color:var(--accent);">≤ $${maeBasedEntry.toFixed(2)}</div>
+                      <div style="font-size:0.75rem;color:var(--text-secondary);">Based on avg ${symAvgMae.toFixed(2)}% adverse move on your past losses</div>
+                    </div>`;
+                }
+
+                if (symAvgMfe !== null) {
+                    const mfeBasedTarget = currentPrice * (1 + symAvgMfe / 100);
+                    html += `
+                    <div style="background:var(--card);padding:10px;border-radius:8px;margin-top:8px;">
+                      <div class="zone-label">📈 Data-Driven Target (from your MFE)</div>
+                      <div class="zone-value" style="color:var(--yellow);">$${mfeBasedTarget.toFixed(2)}</div>
+                      <div style="font-size:0.75rem;color:var(--text-secondary);">Your losing trades reached +${symAvgMfe.toFixed(2)}% before reversing</div>
+                    </div>`;
+                }
+
+                html += `</div>`;
+
+                // Key insight box
+                html += `<div class="insight-box">`;
+
+                if (symbolWinRate !== null && symbolWinRate >= 60 && conditionSignal === 'buy') {
+                    html +=
+                        `<strong>🎯 HIGH CONVICTION:</strong> Your ${symbolWinRate}% win rate on ${symbol} combined with current ${marketCondition} suggests this is a <strong>prime opportunity</strong>. Consider 1:1 R:R with entry near $${supportZone.toFixed(2)}.`;
+                } else if (symbolWinRate !== null && symbolWinRate < 40) {
+                    html +=
+                        `<strong>⚠️ WARNING:</strong> Your win rate on ${symbol} is only ${symbolWinRate}%. The transcript says: "Isolate the worst confluences and <strong>do the opposite</strong>." Consider fading your usual setup or avoiding this symbol.`;
+                } else if (conditionSignal === 'avoid') {
+                    html +=
+                        `<strong>🚫 SIT OUT:</strong> Market is in ${marketCondition}. The transcript advises: "All strategies fail when traded in the wrong conditions." Wait for a range-bound or tight trending market.`;
+                } else {
+                    html +=
+                        `<strong>📊 DATA-BACKED ENTRY:</strong> Based on the transcript's principles, the right price to buy is near <strong>$${supportZone.toFixed(2)}</strong> with a stop below $${recentLow.toFixed(2)} and a 1:1 target. Log 100 trades to build your personal edge on this symbol.`;
+                }
+
+                html += `</div>`;
+
+                // Volume note
+                html += `
+                <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:8px;text-align:right;">
+                  ATR(14): $${atr.toFixed(2)} | SMA20: $${sma20.toFixed(2)} | Vol: ${latestVol > avgVol20 * 1.5 ? '🔥 Above Avg' : 'Normal'}
+                </div>`;
+
+                resultDiv.innerHTML = html;
+
+            } catch (error) {
+                console.error(error);
+                resultDiv.innerHTML = `
+                <div class="analysis-card" style="border:1px solid var(--red);">
+                  <span style="color:var(--red);">⚠️ Unable to load data for "${symbol}".</span><br>
+                  <span style="font-size:0.85rem;color:var(--text-secondary);">
+                    Possible causes: Invalid symbol, API limit reached, or network issue. Try again in a moment.
+                  </span>
+                  <br><br>
+                  <strong>Common symbols to test:</strong> AAPL, MSFT, TSLA, SPY, NVDA
+                </div>`;
+            }
+        }
+
+        // ==================== INIT ====================
         updateDashboard();
-        window.addEventListener('resize', () => { if (document.getElementById('dashboard').classList.contains(
-                'active')) updateDashboard(); });
     </script>
 </body>
 </html>
