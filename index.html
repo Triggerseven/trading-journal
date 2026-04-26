@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Trading Journal Pro</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent: #3b82f6;
+            --green: #22c55e;
+            --red: #ef4444;
+            --yellow: #eab308;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            padding-bottom: 80px;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+        header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+        header h1 { font-size: 1.5rem; color: var(--accent); }
+        header p { font-size: 0.85rem; color: var(--text-secondary); }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .card h3 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .stat {
+            background: var(--bg);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value { font-size: 1.5rem; font-weight: 700; }
+        .stat-value.green { color: var(--green); }
+        .stat-value.red { color: var(--red); }
+        .stat-label { font-size: 0.75rem; color: var(--text-secondary); }
+
+        canvas { width: 100%; height: 200px; margin-top: 8px; }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            margin-top: 8px;
+            transition: 0.2s;
+        }
+        .btn:active { opacity: 0.8; transform: scale(0.98); }
+        .btn-secondary {
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+        .btn-danger { background: var(--red); }
+
+        label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin: 12px 0 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+            font-family: inherit;
+            -webkit-appearance: none;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        textarea { resize: vertical; min-height: 60px; }
+
+        .trade-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: var(--bg);
+            border-radius: 8px;
+            margin-bottom: 6px;
+        }
+        .trade-row .symbol { font-weight: 700; font-size: 1.1rem; }
+        .trade-row .pnl { font-weight: 700; }
+        .trade-row .date { font-size: 0.75rem; color: var(--text-secondary); }
+
+        .nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card);
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px;
+            z-index: 100;
+        }
+        .nav-btn {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            border: none;
+            background: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+        .nav-btn.active { color: var(--accent); background: var(--bg); }
+        .nav-btn .icon { font-size: 1.3rem; display: block; }
+
+        .section { display: none; }
+        .section.active { display: block; }
+
+        .analysis-result {
+            background: var(--bg);
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 8px;
+            font-size: 0.9rem;
+            border-left: 3px solid var(--accent);
+        }
+        .analysis-result .highlight {
+            color: var(--accent);
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Trading Journal Pro</h1>
+            <p>Build your edge through data</p>
+        </header>
+
+        <!-- Dashboard -->
+        <div id="dashboard" class="section active">
+            <div class="card">
+                <h3>Performance Overview</h3>
+                <div class="stats-grid">
+                    <div class="stat">
+                        <div class="stat-value" id="stat-total">0</div>
+                        <div class="stat-label">Total Trades</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value green" id="stat-winrate">0%</div>
+                        <div class="stat-label">Win Rate</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="stat-pf">0</div>
+                        <div class="stat-label">Profit Factor</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="stat-pnl">$0</div>
+                        <div class="stat-label">Total P&L</div>
+                    </div>
+                </div>
+                <canvas id="equityChart"></canvas>
+            </div>
+            <div class="card">
+                <h3>Quick Stats</h3>
+                <div class="stats-grid">
+                    <div class="stat">
+                        <div class="stat-value" id="stat-avgwin">$0</div>
+                        <div class="stat-label">Avg Win</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="stat-avgloss">$0</div>
+                        <div class="stat-label">Avg Loss</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="stat-streak">0</div>
+                        <div class="stat-label">Current Streak</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="stat-best">$0</div>
+                        <div class="stat-label">Best Trade</div>
+                    </div>
+                </div>
+            </div>
+            <button class="btn" onclick="switchSection('logtrade')">+ Log New Trade</button>
+        </div>
+
+        <!-- Log Trade -->
+        <div id="logtrade" class="section">
+            <div class="card">
+                <h3>New Trade Entry</h3>
+                <label>Symbol</label>
+                <input type="text" id="ticker" placeholder="e.g., AAPL" maxlength="10" required>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div>
+                        <label>Direction</label>
+                        <select id="direction">
+                            <option value="Long">Long</option>
+                            <option value="Short">Short</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>R:R Target</label>
+                        <select id="rr">
+                            <option value="1:1">1:1</option>
+                            <option value="1:2">1:2</option>
+                            <option value="1:3">1:3</option>
+                        </select>
+                    </div>
+                </div>
+
+                <label>Strategy / Setup</label>
+                <select id="strategy">
+                    <option value="">-- Select --</option>
+                    <option>Reversal in Range</option>
+                    <option>Pullback to 20 EMA</option>
+                    <option>Breakout with Volume</option>
+                    <option>Support Bounce</option>
+                    <option>Resistance Rejection</option>
+                    <option>Other</option>
+                </select>
+
+                <label>Market Condition</label>
+                <select id="condition">
+                    <option value="">-- Select --</option>
+                    <option>Strong Trend Up</option>
+                    <option>Strong Trend Down</option>
+                    <option>Range-bound</option>
+                    <option>High Volatility / News</option>
+                    <option>Low Volume / Choppy</option>
+                </select>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                    <div>
+                        <label>Entry $</label>
+                        <input type="number" id="entry" placeholder="100.00" step="0.01" required>
+                    </div>
+                    <div>
+                        <label>Stop $</label>
+                        <input type="number" id="stop" placeholder="99.50" step="0.01" required>
+                    </div>
+                    <div>
+                        <label>Target $</label>
+                        <input type="number" id="target" placeholder="101.00" step="0.01" required>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div>
+                        <label>Position Size</label>
+                        <input type="number" id="size" placeholder="100" required>
+                    </div>
+                    <div>
+                        <label>Exit Date</label>
+                        <input type="date" id="exitdate">
+                    </div>
+                </div>
+
+                <label>Trade Outcome</label>
+                <select id="outcome">
+                    <option value="">-- Select --</option>
+                    <option value="Win">Win</option>
+                    <option value="Loss">Loss</option>
+                    <option value="Breakeven">Breakeven</option>
+                </select>
+
+                <div id="mfe-mae-fields" style="display:none;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <div>
+                            <label>MFE (best price hit)</label>
+                            <input type="number" id="mfe" placeholder="e.g., 102.00" step="0.01">
+                        </div>
+                        <div>
+                            <label>MAE (worst price hit)</label>
+                            <input type="number" id="mae" placeholder="e.g., 99.00" step="0.01">
+                        </div>
+                    </div>
+                </div>
+
+                <label>Notes</label>
+                <textarea id="notes" placeholder="Quick reflection..."></textarea>
+
+                <button class="btn" onclick="saveTrade()">💾 Save Trade</button>
+                <button class="btn btn-secondary" onclick="switchSection('dashboard')">← Back</button>
+            </div>
+        </div>
+
+        <!-- Trade History -->
+        <div id="history" class="section">
+            <div class="card">
+                <h3>Trade History</h3>
+                <input type="text" id="historySearch" placeholder="Search by symbol..." oninput="renderHistory()"
+                style="margin-bottom:8px;">
+                <div id="historyList"></div>
+                <button class="btn btn-danger" onclick="clearAllTrades()" style="margin-top:12px;">⚠️ Clear All Trades</button>
+                <button class="btn btn-secondary" onclick="exportCSV()">📥 Export CSV</button>
+            </div>
+        </div>
+
+        <!-- Analysis Lab -->
+        <div id="analysis" class="section">
+            <div class="card">
+                <h3>🔬 Analysis Lab</h3>
+                <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:8px;">
+                    Analyze YOUR data to find optimal entries & targets.
+                </p>
+                <label>Filter by Strategy</label>
+                <select id="analysisStrategy" onchange="runAnalysis()">
+                    <option value="All">All Strategies</option>
+                </select>
+                <label>Filter by Symbol</label>
+                <input type="text" id="analysisSymbol" placeholder="e.g., AAPL (or leave blank for all)"
+                oninput="runAnalysis()">
+                <div id="analysisResults"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <div class="nav">
+        <button class="nav-btn active" onclick="switchSection('dashboard')">
+            <span class="icon">📊</span> Dashboard
+        </button>
+        <button class="nav-btn" onclick="switchSection('logtrade')">
+            <span class="icon">➕</span> Log Trade
+        </button>
+        <button class="nav-btn" onclick="switchSection('history');renderHistory();">
+            <span class="icon">📋</span> History
+        </button>
+        <button class="nav-btn" onclick="switchSection('analysis');populateAnalysisFilters();runAnalysis();">
+            <span class="icon">🔬</span> Analysis
+        </button>
+    </div>
+
+    <script>
+        // ---- DATA STORAGE ----
+        const STORAGE_KEY = 'trading_journal_trades';
+        function getTrades() { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+        function saveTrades(trades) { localStorage.setItem(STORAGE_KEY, JSON.stringify(trades)); }
+
+        // ---- NAVIGATION ----
+        function switchSection(sectionId) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.getElementById(sectionId).classList.add('active');
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            event.target.closest('.nav-btn')?.classList.add('active');
+            if (sectionId === 'dashboard') updateDashboard();
+        }
+
+        // ---- TOGGLE MFE/MAE FIELDS ----
+        document.getElementById('outcome').addEventListener('change', function() {
+            document.getElementById('mfe-mae-fields').style.display =
+                (this.value === 'Loss' || this.value === 'Breakeven') ? 'block' : 'none';
+        });
+
+        // ---- SAVE TRADE ----
+        function saveTrade() {
+            const ticker = document.getElementById('ticker').value.trim().toUpperCase();
+            const direction = document.getElementById('direction').value;
+            const rr = document.getElementById('rr').value;
+            const strategy = document.getElementById('strategy').value;
+            const condition = document.getElementById('condition').value;
+            const entry = parseFloat(document.getElementById('entry').value);
+            const stop = parseFloat(document.getElementById('stop').value);
+            const target = parseFloat(document.getElementById('target').value);
+            const size = parseInt(document.getElementById('size').value);
+            const exitdate = document.getElementById('exitdate').value || new Date().toISOString().split('T')[0];
+            const outcome = document.getElementById('outcome').value;
+
+            if (!ticker || !entry || !stop || !target || !size || !outcome) {
+                alert('Please fill in all required fields (Symbol, Entry, Stop, Target, Size, Outcome)');
+                return;
+            }
+
+            let pnl = 0;
+            if (outcome === 'Win') {
+                pnl = direction === 'Long' ? (target - entry) * size : (entry - target) * size;
+            } else if (outcome === 'Loss') {
+                pnl = direction === 'Long' ? (stop - entry) * size : (entry - stop) * size;
+            }
+
+            const mfeVal = document.getElementById('mfe').value ? parseFloat(document.getElementById('mfe').value) : null;
+            const maeVal = document.getElementById('mae').value ? parseFloat(document.getElementById('mae').value) : null;
+
+            const trade = {
+                id: Date.now(),
+                date: exitdate,
+                ticker,
+                direction,
+                rr,
+                strategy,
+                condition,
+                entry,
+                stop,
+                target,
+                size,
+                outcome,
+                pnl: Math.round(pnl * 100) / 100,
+                mfe: mfeVal,
+                mae: maeVal,
+                notes: document.getElementById('notes').value
+            };
+
+            const trades = getTrades();
+            trades.unshift(trade);
+            saveTrades(trades);
+
+            // Clear form
+            ['ticker', 'entry', 'stop', 'target', 'size', 'mfe', 'mae', 'notes'].forEach(id => document.getElementById(
+                id).value = '');
+            document.getElementById('outcome').value = '';
+            document.getElementById('strategy').value = '';
+            document.getElementById('condition').value = '';
+            document.getElementById('mfe-mae-fields').style.display = 'none';
+
+            alert('✅ Trade saved!');
+            switchSection('dashboard');
+        }
+
+        // ---- DELETE TRADE ----
+        function deleteTrade(id) {
+            if (!confirm('Delete this trade?')) return;
+            const trades = getTrades().filter(t => t.id !== id);
+            saveTrades(trades);
+            renderHistory();
+            updateDashboard();
+        }
+
+        // ---- CLEAR ALL ----
+        function clearAllTrades() {
+            if (!confirm('⚠️ Delete ALL trades? This cannot be undone.')) return;
+            saveTrades([]);
+            renderHistory();
+            updateDashboard();
+        }
+
+        // ---- EXPORT CSV ----
+        function exportCSV() {
+            const trades = getTrades();
+            if (trades.length === 0) { alert('No trades to export'); return; }
+            const headers = ['Date', 'Symbol', 'Direction', 'R:R', 'Strategy', 'Condition', 'Entry', 'Stop', 'Target',
+                'Size', 'Outcome', 'P&L', 'MFE', 'MAE', 'Notes'
+            ];
+            const rows = trades.map(t =>
+                [t.date, t.ticker, t.direction, t.rr, t.strategy, t.condition, t.entry, t.stop, t.target, t.size, t
+                    .outcome, t.pnl, t.mfe || '', t.mae || '', t.notes || ''
+                ].map(v => `"${v}"`).join(',')
+            );
+            const csv = [headers.join(','), ...rows].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'trading_journal.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ---- RENDER HISTORY ----
+        function renderHistory() {
+            const trades = getTrades();
+            const search = (document.getElementById('historySearch')?.value || '').toUpperCase();
+            const filtered = search ? trades.filter(t => t.ticker.includes(search)) : trades;
+
+            const container = document.getElementById('historyList');
+            if (filtered.length === 0) {
+                container.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:20px;">No trades found</p>';
+                return;
+            }
+            container.innerHTML = filtered.map(t => `
+            <div class="trade-row">
+              <div>
+                <span class="symbol">${t.ticker}</span>
+                <span style="color:var(--text-secondary);">${t.strategy || 'N/A'}</span>
+                <span class="date">${t.date}</span>
+              </div>
+              <div style="text-align:right;">
+                <span class="pnl" style="color:${t.pnl >= 0 ? 'var(--green)' : 'var(--red)'}">
+                  ${t.pnl >= 0 ? '+' : ''}$${t.pnl.toFixed(2)}
+                </span>
+                <span style="font-size:0.75rem;display:block;color:var(--text-secondary);">${t.outcome} | ${t.direction}</span>
+                <button onclick="deleteTrade(${t.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.75rem;">🗑️</button>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        // ---- UPDATE DASHBOARD ----
+        function updateDashboard() {
+            const trades = getTrades();
+            const total = trades.length;
+            const wins = trades.filter(t => t.outcome === 'Win').length;
+            const losses = trades.filter(t => t.outcome === 'Loss').length;
+            const winRate = total > 0 ? Math.round((wins / (wins + losses)) * 100) || 0 : 0;
+            const totalPnl = trades.reduce((sum, t) => sum + t.pnl, 0);
+            const grossWin = trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
+            const grossLoss = Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
+            const profitFactor = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (grossWin > 0 ? '∞' : '0');
+
+            const winTrades = trades.filter(t => t.outcome === 'Win');
+            const lossTrades = trades.filter(t => t.outcome === 'Loss');
+            const avgWin = winTrades.length > 0 ? winTrades.reduce((s, t) => s + t.pnl, 0) / winTrades.length : 0;
+            const avgLoss = lossTrades.length > 0 ? lossTrades.reduce((s, t) => s + t.pnl, 0) / lossTrades.length : 0;
+            const bestTrade = trades.length > 0 ? Math.max(...trades.map(t => t.pnl)) : 0;
+
+            // Current streak
+            let streak = 0;
+            for (const t of trades) {
+                if (t.outcome === 'Win') streak++;
+                else if (t.outcome === 'Loss') { streak--; break; }
+            }
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-winrate').textContent = winRate + '%';
+            document.getElementById('stat-pf').textContent = profitFactor;
+            document.getElementById('stat-pnl').textContent = (totalPnl >= 0 ? '+' : '') + '$' + totalPnl.toFixed(2);
+            document.getElementById('stat-avgwin').textContent = '$' + avgWin.toFixed(2);
+            document.getElementById('stat-avgloss').textContent = '$' + avgLoss.toFixed(2);
+            document.getElementById('stat-streak').textContent = streak;
+            document.getElementById('stat-best').textContent = '$' + bestTrade.toFixed(2);
+
+            drawEquityCurve(trades);
+        }
+
+        // ---- EQUITY CURVE ----
+        function drawEquityCurve(trades) {
+            const canvas = document.getElementById('equityChart');
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = 200 * dpr;
+            ctx.scale(dpr, dpr);
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = '200px';
+
+            const w = rect.width;
+            const h = 200;
+            ctx.clearRect(0, 0, w, h);
+
+            if (trades.length < 2) {
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Log 2+ trades to see equity curve', w / 2, h / 2);
+                return;
+            }
+
+            const reversed = [...trades].reverse();
+            let equity = 0;
+            const points = reversed.map(t => { equity += t.pnl; return equity; });
+            const maxEq = Math.max(...points, 0);
+            const minEq = Math.min(...points, 0);
+            const range = maxEq - minEq || 1;
+            const stepX = w / (points.length - 1);
+
+            // Draw line
+            ctx.beginPath();
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 2;
+            points.forEach((p, i) => {
+                const x = i * stepX;
+                const y = h - ((p - minEq) / range) * (h - 20) - 10;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            // Zero line
+            const zeroY = h - ((0 - minEq) / range) * (h - 20) - 10;
+            ctx.beginPath();
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.moveTo(0, zeroY);
+            ctx.lineTo(w, zeroY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        // ---- POPULATE ANALYSIS FILTERS ----
+        function populateAnalysisFilters() {
+            const trades = getTrades();
+            const strategies = [...new Set(trades.map(t => t.strategy).filter(Boolean))];
+            const select = document.getElementById('analysisStrategy');
+            select.innerHTML = '<option value="All">All Strategies</option>' +
+                strategies.map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+
+        // ---- RUN ANALYSIS ----
+        function runAnalysis() {
+            const trades = getTrades();
+            const strategyFilter = document.getElementById('analysisStrategy').value;
+            const symbolFilter = (document.getElementById('analysisSymbol').value || '').trim().toUpperCase();
+
+            let filtered = trades;
+            if (strategyFilter !== 'All') filtered = filtered.filter(t => t.strategy === strategyFilter);
+            if (symbolFilter) filtered = filtered.filter(t => t.ticker === symbolFilter);
+
+            const resultsDiv = document.getElementById('analysisResults');
+            if (filtered.length === 0) {
+                resultsDiv.innerHTML =
+                    '<div class="analysis-result">No trades match the filters. Log more trades to see analysis.</div>';
+                return;
+            }
+
+            const wins = filtered.filter(t => t.outcome === 'Win');
+            const losses = filtered.filter(t => t.outcome === 'Loss');
+            const breakevens = filtered.filter(t => t.outcome === 'Breakeven');
+            const total = wins.length + losses.length;
+            const winRate = total > 0 ? Math.round((wins.length / total) * 100) : 0;
+
+            // MFE/MAE Analysis for losses
+            const lossesWithMfe = losses.filter(t => t.mfe !== null && t.mfe !== undefined);
+            const avgMfe = lossesWithMfe.length > 0 ?
+                lossesWithMfe.reduce((s, t) => {
+                    const mfePct = t.direction === 'Long' ? ((t.mfe - t.entry) / t.entry * 100) : ((t.entry - t
+                        .mfe) / t.entry * 100);
+                    return s + mfePct;
+                }, 0) / lossesWithMfe.length : null;
+
+            const lossesWithMae = losses.filter(t => t.mae !== null && t.mae !== undefined);
+            const avgMae = lossesWithMae.length > 0 ?
+                lossesWithMae.reduce((s, t) => {
+                    const maePct = t.direction === 'Long' ? ((t.entry - t.mae) / t.entry * 100) : ((t.mae - t.entry) /
+                        t.entry * 100);
+                    return s + maePct;
+                }, 0) / lossesWithMae.length : null;
+
+            // Win rate by market condition
+            const conditions = [...new Set(filtered.map(t => t.condition).filter(Boolean))];
+            const conditionBreakdown = conditions.map(c => {
+                const cTrades = filtered.filter(t => t.condition === c);
+                const cWins = cTrades.filter(t => t.outcome === 'Win').length;
+                const cTotal = cTrades.filter(t => t.outcome !== 'Breakeven').length;
+                const cRate = cTotal > 0 ? Math.round((cWins / cTotal) * 100) : 0;
+                const cPnl = cTrades.reduce((s, t) => s + t.pnl, 0);
+                return { condition: c, winRate: cRate, count: cTrades.length, pnl: cPnl };
+            }).sort((a, b) => b.winRate - a.winRate);
+
+            let html = `
+            <div class="analysis-result">
+              <strong>📋 Sample Size:</strong> <span class="highlight">${filtered.length} trades</span><br>
+              <strong>🏆 Win Rate:</strong> <span class="highlight">${winRate}%</span> (${wins.length}W / ${losses.length}L / ${breakevens.length}BE)
+            </div>
+          `;
+
+            if (avgMfe !== null) {
+                html += `
+            <div class="analysis-result">
+              <strong>📈 MFE Analysis (optimize targets):</strong><br>
+              On <span class="highlight">losing trades</span>, price moved in your favor by an average of
+              <span class="highlight">${avgMfe.toFixed(2)}%</span> before reversing.<br>
+              ➡️ <strong>Action:</strong> Consider taking partial profits or tightening targets to capture this movement.
+            </div>`;
+            }
+
+            if (avgMae !== null) {
+                html += `
+            <div class="analysis-result">
+              <strong>📉 MAE Analysis (optimize entries):</strong><br>
+              Price moved against you by an average of
+              <span class="highlight">${avgMae.toFixed(2)}%</span> on analyzed trades.<br>
+              ➡️ <strong>Action:</strong> If your typical stop is wider than ${avgMae.toFixed(2)}%, consider entering at a better price or tightening your stop.
+            </div>`;
+            }
+
+            if (conditionBreakdown.length > 0) {
+                html += `
+            <div class="analysis-result">
+              <strong>🌤️ Win Rate by Market Condition:</strong><br>
+              ${conditionBreakdown.map(c => `
+                <div style="display:flex;justify-content:space-between;margin:4px 0;font-size:0.9rem;">
+                  <span>${c.condition}</span>
+                  <span style="color:${c.winRate >= 50 ? 'var(--green)' : 'var(--red)'};font-weight:700;">
+                    ${c.winRate}% (${c.count} trades, $${c.pnl.toFixed(2)})
+                  </span>
+                </div>
+              `).join('')}
+              <br>➡️ <strong>Action:</strong> Focus on the highest win-rate conditions. Avoid or invert strategies in the lowest.
+            </div>`;
+            }
+
+            resultsDiv.innerHTML = html;
+        }
+
+        // ---- INIT ----
+        document.getElementById('exitdate').value = new Date().toISOString().split('T')[0];
+        updateDashboard();
+        window.addEventListener('resize', () => { if (document.getElementById('dashboard').classList.contains(
+                'active')) updateDashboard(); });
+    </script>
+</body>
+</html>
