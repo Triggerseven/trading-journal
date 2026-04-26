@@ -523,7 +523,6 @@
             window.addEventListener('resize', () => {
                 if (document.getElementById('dashboard').classList.contains('active')) updateDashboard();
             });
-            // Enter key search trigger
             document.getElementById('stockSearch').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') analyzeStock();
             });
@@ -592,7 +591,6 @@
             switchSection('dashboard');
         }
 
-        // ---- DELETE TRADE ----
         function deleteTrade(id) {
             if (!confirm('Delete this trade?')) return;
             const trades = getTrades().filter(t => t.id !== id);
@@ -601,7 +599,6 @@
             updateDashboard();
         }
 
-        // ---- CLEAR ALL ----
         function clearAllTrades() {
             if (!confirm('⚠️ Delete ALL trades? This cannot be undone.')) return;
             saveTrades([]);
@@ -609,7 +606,6 @@
             updateDashboard();
         }
 
-        // ---- EXPORT CSV ----
         function exportCSV() {
             const trades = getTrades();
             if (trades.length === 0) { alert('No trades to export'); return; }
@@ -631,7 +627,6 @@
             URL.revokeObjectURL(url);
         }
 
-        // ---- RENDER HISTORY ----
         function renderHistory() {
             const trades = getTrades();
             const search = (document.getElementById('historySearch')?.value || '').toUpperCase();
@@ -661,7 +656,6 @@
           `).join('');
         }
 
-        // ---- UPDATE DASHBOARD ----
         function updateDashboard() {
             const trades = getTrades();
             const total = trades.length;
@@ -697,7 +691,6 @@
             drawEquityCurve(trades);
         }
 
-        // ---- EQUITY CURVE ----
         function drawEquityCurve(trades) {
             const canvas = document.getElementById('equityChart');
             const ctx = canvas.getContext('2d');
@@ -751,7 +744,6 @@
             ctx.setLineDash([]);
         }
 
-        // ---- POPULATE ANALYSIS FILTERS ----
         function populateAnalysisFilters() {
             const trades = getTrades();
             const strategies = [...new Set(trades.map(t => t.strategy).filter(Boolean))];
@@ -760,7 +752,6 @@
                 strategies.map(s => `<option value="${s}">${s}</option>`).join('');
         }
 
-        // ---- RUN ANALYSIS ----
         function runAnalysis() {
             const trades = getTrades();
             const strategyFilter = document.getElementById('analysisStrategy').value;
@@ -855,7 +846,7 @@
             resultsDiv.innerHTML = html;
         }
 
-        // ==================== 📊 LIVE STOCK ANALYSIS ====================
+        // ==================== 📊 LIVE STOCK ANALYSIS (FIXED) ====================
         async function analyzeStock() {
             const symbol = document.getElementById('stockSearch').value.trim().toUpperCase();
             const resultDiv = document.getElementById('stockResult');
@@ -868,29 +859,29 @@
             resultDiv.innerHTML = '<p><span class="spinner"></span> Analyzing ' + symbol + '...</p>';
 
             try {
-                // ---- FETCH MARKET DATA ----
-                // 1. Get quote
-                const quoteRes = await fetch(
-                    `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo&includePrePost=false`)}`
-                );
-                if (!quoteRes.ok) throw new Error('Symbol not found');
-                const quoteData = await quoteRes.json();
+                // Use multiple proxy methods to fetch data
+                const quoteData = await fetchStockData(symbol);
+
+                if (!quoteData || !quoteData.chart || !quoteData.chart.result || quoteData.chart.result.length === 0) {
+                    throw new Error('No data returned');
+                }
+
                 const result = quoteData.chart.result[0];
                 const meta = result.meta;
                 const quotes = result.indicators.quote[0];
                 const timestamps = result.timestamp;
 
                 const currentPrice = meta.regularMarketPrice;
-                const prevClose = meta.previousClose || meta.chartPreviousClose;
+                const prevClose = meta.previousClose || meta.chartPreviousClose || currentPrice;
                 const change = currentPrice - prevClose;
                 const changePct = ((change / prevClose) * 100);
 
-                // Calculate key levels from 3 months of data
+                // Calculate key levels from data
                 const highs = quotes.high.filter(h => h !== null);
                 const lows = quotes.low.filter(l => l !== null);
                 const closes = quotes.close.filter(c => c !== null);
 
-                if (highs.length < 5) throw new Error('Insufficient data');
+                if (highs.length < 5) throw new Error('Insufficient price data');
 
                 const high3m = Math.max(...highs);
                 const low3m = Math.min(...lows);
@@ -904,21 +895,24 @@
                     const tr = Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc));
                     trValues.push(tr);
                 }
-                const atr = trValues.slice(-14).reduce((a, b) => a + b, 0) / 14;
+                const recentTrValues = trValues.slice(-14);
+                const atr = recentTrValues.length > 0 ? recentTrValues.reduce((a, b) => a + b, 0) / recentTrValues.length : (high3m - low3m) * 0.05;
 
                 // Simple moving averages
-                const sma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+                const sma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, closes.slice(-20).length);
                 const sma50 = closes.length >= 50 ? closes.slice(-50).reduce((a, b) => a + b, 0) / 50 : sma20;
 
-                // Recent range (last 20 days)
+                // Recent range
+                const recentCloses = closes.slice(-20);
                 const recentHigh = Math.max(...highs.slice(-20));
                 const recentLow = Math.min(...lows.slice(-20));
                 const rangeSize = ((recentHigh - recentLow) / currentPrice) * 100;
 
                 // Volume trend
                 const volumes = quotes.volume?.filter(v => v !== null) || [];
-                const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
-                const latestVol = volumes[volumes.length - 1] || 0;
+                const recentVolumes = volumes.slice(-20);
+                const avgVol20 = recentVolumes.length > 0 ? recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length : 0;
+                const latestVol = volumes.length > 0 ? volumes[volumes.length - 1] : 0;
 
                 // Determine market condition
                 let marketCondition = 'Range-bound';
@@ -942,10 +936,10 @@
                 const symbolTrades = trades.filter(t => t.ticker === symbol);
                 const symbolWins = symbolTrades.filter(t => t.outcome === 'Win');
                 const symbolLosses = symbolTrades.filter(t => t.outcome === 'Loss');
-                const symbolWinRate = (symbolWins.length + symbolLosses.length) > 0 ?
-                    Math.round((symbolWins.length / (symbolWins.length + symbolLosses.length)) * 100) : null;
+                const totalDecided = symbolWins.length + symbolLosses.length;
+                const symbolWinRate = totalDecided > 0 ?
+                    Math.round((symbolWins.length / totalDecided) * 100) : null;
 
-                // MFE/MAE from journal for this symbol
                 const symLossesWithMfe = symbolLosses.filter(t => t.mfe !== null);
                 const symAvgMfe = symLossesWithMfe.length > 0 ?
                     symLossesWithMfe.reduce((s, t) => {
@@ -960,20 +954,17 @@
                             .entry) / t.entry * 100));
                     }, 0) / symLossesWithMae.length : null;
 
-                // Calculate suggested entry zones based on data
                 const supportZone = recentLow + (atr * 0.5);
                 const resistanceZone = recentHigh - (atr * 0.5);
-                const midPoint = (recentHigh + recentLow) / 2;
 
                 // ========== BUILD OUTPUT ==========
                 let html = '';
 
-                // Header with price
                 html += `
                 <div class="analysis-card">
                   <div class="header-row">
                     <div>
-                      <span style="font-size:0.85rem;color:var(--text-secondary);">${symbol} · ${meta.exchangeName || 'US'}</span>
+                      <span style="font-size:0.85rem;color:var(--text-secondary);">${symbol} · ${meta.exchangeName || 'US Market'}</span>
                       <div class="price">$${currentPrice.toFixed(2)}</div>
                     </div>
                     <div>
@@ -984,7 +975,6 @@
                   </div>
                 </div>`;
 
-                // Journal Data
                 if (symbolTrades.length > 0) {
                     const totalPnl = symbolTrades.reduce((s, t) => s + t.pnl, 0);
                     html += `
@@ -1003,7 +993,6 @@
                 </div>`;
                 }
 
-                // Market Condition Signal
                 const signalMap = {
                     'buy': '<span class="signal-badge signal-buy">✅ FAVORABLE — High Probability Zone</span>',
                     'wait': '<span class="signal-badge signal-wait">⏳ NEUTRAL — Wait for Clarity</span>',
@@ -1014,35 +1003,33 @@
                 <div class="analysis-card">
                   <strong>🌤️ Market Structure</strong><br>
                   <span style="font-size:0.9rem;">Condition: <strong>${marketCondition}</strong></span><br>
-                  <span style="font-size:0.85rem;color:var(--text-secondary);">Range: $${recentLow.toFixed(2)} – $${recentHigh.toFixed(2)} (${rangeSize.toFixed(1)}%)</span><br>
+                  <span style="font-size:0.85rem;color:var(--text-secondary);">20-Day Range: $${recentLow.toFixed(2)} – $${recentHigh.toFixed(2)} (${rangeSize.toFixed(1)}%)</span><br>
                   <div style="margin-top:8px;">${signalMap[conditionSignal]}</div>
                 </div>`;
 
-                // Price Zones
                 html += `
                 <div class="analysis-card">
-                  <strong>📍 Price Zones & Levels</strong>
+                  <strong>📍 Entry & Exit Zones</strong>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
                     <div style="background:var(--card);padding:10px;border-radius:8px;text-align:center;">
                       <div class="zone-label">🟢 Ideal Buy Zone</div>
                       <div class="zone-value" style="color:var(--green);">≤ $${supportZone.toFixed(2)}</div>
-                      <div style="font-size:0.75rem;color:var(--text-secondary);">Near Support</div>
+                      <div style="font-size:0.75rem;color:var(--text-secondary);">Near Support (${((supportZone/currentPrice-1)*100).toFixed(1)}% from price)</div>
                     </div>
                     <div style="background:var(--card);padding:10px;border-radius:8px;text-align:center;">
                       <div class="zone-label">🔴 Avoid Buying Above</div>
                       <div class="zone-value" style="color:var(--red);">> $${resistanceZone.toFixed(2)}</div>
-                      <div style="font-size:0.75rem;color:var(--text-secondary);">Near Resistance</div>
+                      <div style="font-size:0.75rem;color:var(--text-secondary);">Near Resistance (${((resistanceZone/currentPrice-1)*100).toFixed(1)}% from price)</div>
                     </div>
+                  </div>`;
 
-`;
-                // Add MFE/MAE based zones if available
                 if (symAvgMae !== null) {
                     const maeBasedEntry = currentPrice * (1 - symAvgMae / 100);
                     html += `
                     <div style="background:var(--card);padding:10px;border-radius:8px;margin-top:8px;">
-                      <div class="zone-label">📉 Data-Driven Entry (from your MAE)</div>
+                      <div class="zone-label">📉 Data-Driven Entry (from YOUR MAE history)</div>
                       <div class="zone-value" style="color:var(--accent);">≤ $${maeBasedEntry.toFixed(2)}</div>
-                      <div style="font-size:0.75rem;color:var(--text-secondary);">Based on avg ${symAvgMae.toFixed(2)}% adverse move on your past losses</div>
+                      <div style="font-size:0.75rem;color:var(--text-secondary);">Your losses averaged ${symAvgMae.toFixed(2)}% adverse move — enter below this</div>
                     </div>`;
                 }
 
@@ -1050,9 +1037,9 @@
                     const mfeBasedTarget = currentPrice * (1 + symAvgMfe / 100);
                     html += `
                     <div style="background:var(--card);padding:10px;border-radius:8px;margin-top:8px;">
-                      <div class="zone-label">📈 Data-Driven Target (from your MFE)</div>
+                      <div class="zone-label">📈 Data-Driven Target (from YOUR MFE history)</div>
                       <div class="zone-value" style="color:var(--yellow);">$${mfeBasedTarget.toFixed(2)}</div>
-                      <div style="font-size:0.75rem;color:var(--text-secondary);">Your losing trades reached +${symAvgMfe.toFixed(2)}% before reversing</div>
+                      <div style="font-size:0.75rem;color:var(--text-secondary);">Your losing trades reached +${symAvgMfe.toFixed(2)}% before reversing — lock profit here</div>
                     </div>`;
                 }
 
@@ -1063,40 +1050,82 @@
 
                 if (symbolWinRate !== null && symbolWinRate >= 60 && conditionSignal === 'buy') {
                     html +=
-                        `<strong>🎯 HIGH CONVICTION:</strong> Your ${symbolWinRate}% win rate on ${symbol} combined with current ${marketCondition} suggests this is a <strong>prime opportunity</strong>. Consider 1:1 R:R with entry near $${supportZone.toFixed(2)}.`;
+                        `<strong>🎯 HIGH CONVICTION:</strong> Your <strong>${symbolWinRate}% win rate</strong> on ${symbol} combined with <strong>${marketCondition}</strong> conditions suggests this is a <strong>prime opportunity</strong>.<br><br>Consider a <strong>1:1 R:R</strong> setup with entry near <strong>$${supportZone.toFixed(2)}</strong> and stop below <strong>$${recentLow.toFixed(2)}</strong>.`;
                 } else if (symbolWinRate !== null && symbolWinRate < 40) {
                     html +=
-                        `<strong>⚠️ WARNING:</strong> Your win rate on ${symbol} is only ${symbolWinRate}%. The transcript says: "Isolate the worst confluences and <strong>do the opposite</strong>." Consider fading your usual setup or avoiding this symbol.`;
+                        `<strong>⚠️ WARNING:</strong> Your win rate on ${symbol} is only <strong>${symbolWinRate}%</strong>. As the transcript says: <em>"Isolate the worst confluences and do the opposite."</em><br><br>Consider <strong>fading your usual setup</strong> or avoiding this symbol until you collect more data.`;
                 } else if (conditionSignal === 'avoid') {
                     html +=
-                        `<strong>🚫 SIT OUT:</strong> Market is in ${marketCondition}. The transcript advises: "All strategies fail when traded in the wrong conditions." Wait for a range-bound or tight trending market.`;
+                        `<strong>🚫 SIT OUT:</strong> Market is in <strong>${marketCondition}</strong>. The transcript is clear: <em>"All strategies fail when traded in the wrong conditions."</em><br><br>Wait for a <strong>range-bound or tight trending market</strong> before entering.`;
+                } else if (symbolTrades.length === 0) {
+                    html +=
+                        `<strong>📊 START COLLECTING DATA:</strong> You haven't traded ${symbol} yet. Based on market structure alone, the transcript suggests entering near <strong>$${supportZone.toFixed(2)}</strong> with a 1:1 target and tight stop.<br><br><strong>Log 100 trades</strong> to build your personal edge — data reveals the truth.`;
                 } else {
                     html +=
-                        `<strong>📊 DATA-BACKED ENTRY:</strong> Based on the transcript's principles, the right price to buy is near <strong>$${supportZone.toFixed(2)}</strong> with a stop below $${recentLow.toFixed(2)} and a 1:1 target. Log 100 trades to build your personal edge on this symbol.`;
+                        `<strong>📊 DATA-BACKED ENTRY:</strong> Based on the transcript's principles, the optimal buy zone is near <strong>$${supportZone.toFixed(2)}</strong> with a stop below <strong>$${recentLow.toFixed(2)}</strong> and a <strong>1:1 target</strong> for high win rate, low variance trading.`;
                 }
 
                 html += `</div>`;
 
-                // Volume note
+                // Volume & ATR note
                 html += `
                 <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:8px;text-align:right;">
-                  ATR(14): $${atr.toFixed(2)} | SMA20: $${sma20.toFixed(2)} | Vol: ${latestVol > avgVol20 * 1.5 ? '🔥 Above Avg' : 'Normal'}
+                  ATR(14): $${atr.toFixed(2)} | SMA20: $${sma20.toFixed(2)} | Vol: ${latestVol > avgVol20 * 1.5 ? '🔥 Above Avg' : '📊 Normal'}
                 </div>`;
 
                 resultDiv.innerHTML = html;
 
             } catch (error) {
-                console.error(error);
+                console.error('Stock analysis error:', error);
                 resultDiv.innerHTML = `
                 <div class="analysis-card" style="border:1px solid var(--red);">
                   <span style="color:var(--red);">⚠️ Unable to load data for "${symbol}".</span><br>
                   <span style="font-size:0.85rem;color:var(--text-secondary);">
-                    Possible causes: Invalid symbol, API limit reached, or network issue. Try again in a moment.
+                    Yahoo Finance may be blocking the request. This is common with free APIs.
                   </span>
                   <br><br>
-                  <strong>Common symbols to test:</strong> AAPL, MSFT, TSLA, SPY, NVDA
+                  <strong>Try these fixes:</strong><br>
+                  • Refresh the page and try again<br>
+                  • Make sure you typed a valid US symbol (AAPL, TSLA, MSFT)<br>
+                  • Try during market hours (9:30am-4pm ET)<br>
+                  <br>
+                  <em>Even without live data, your journal analysis still works!</em>
                 </div>`;
             }
+        }
+
+        // ---- FETCH STOCK DATA WITH MULTIPLE PROXY FALLBACKS ----
+        async function fetchStockData(symbol) {
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo&includePrePost=false`;
+
+            // Proxy options — try multiple until one works
+            const proxyUrls = [
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+                `https://corsproxy.io/?${encodeURIComponent(url)}`,
+                `https://cors-anywhere.herokuapp.com/${url}`,
+                url // Direct try (may work depending on browser)
+            ];
+
+            for (const proxyUrl of proxyUrls) {
+                try {
+                    console.log('Trying:', proxyUrl.substring(0, 60) + '...');
+                    const response = await fetch(proxyUrl, {
+                        headers: { 'Accept': 'application/json' },
+                        signal: AbortSignal.timeout(8000)
+                    });
+                    if (!response.ok) continue;
+                    const data = await response.json();
+                    if (data && data.chart && data.chart.result && data.chart.result.length > 0) {
+                        console.log('✅ Success with proxy');
+                        return data;
+                    }
+                } catch (e) {
+                    console.log('Proxy failed, trying next...');
+                    continue;
+                }
+            }
+
+            throw new Error('All proxy attempts failed');
         }
 
         // ==================== INIT ====================
